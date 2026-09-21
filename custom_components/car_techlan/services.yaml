@@ -70,3 +70,47 @@ server_camera_restart:
       required: true
       selector:
         text:
+
+set_camera_action:
+  name: Действие для камеры
+  description: Задать действие и устройства для конкретной камеры (приоритет над общими настройками). Сохраняется в опциях интеграции.
+  fields:
+    camera:
+      name: Камера
+      description: Имя камеры как в сервере (Post5, Post3, Post2…)
+      required: true
+      selector:
+        text:
+    action:
+      name: Действие (любой номер)
+      selector:
+        select:
+          options: [open, close, toggle, turn_on, turn_off, impulse, none]
+    action_known:
+      name: Действие для СВОЕГО номера
+      selector:
+        select:
+          options: [open, close, toggle, turn_on, turn_off, impulse, none]
+    action_unknown:
+      name: Действие для ЧУЖОГО номера
+      selector:
+        select:
+          options: [open, close, toggle, turn_on, turn_off, impulse, none]
+    devices:
+      name: Устройства (entity_id)
+      selector:
+        entity:
+          multiple: true
+    cooldown:
+      name: Пауза, с
+      selector:
+        number:
+          min: 0
+          max: 3600
+    hold_seconds:
+      name: Импульс, с
+      selector:
+        number:
+          min: 0.2
+          max: 60
+          step: 0.1
