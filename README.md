@@ -31,11 +31,33 @@
 3. При необходимости в опциях: адрес сервера (`server_host`, `server_port`), интервал опроса `server_poll_seconds`.
 4. Действия по «своим/чужим» номерам, уведомления и условия — в том же мастере/опциях.
 
+
+## Действия и события по каждой камере (v1.2.0)
+
+- Для каждой камеры публикуется **своё событие**: `car_techlan_plate_<камера>` (например `car_techlan_plate_post5`),
+  плюс общее `car_techlan_plate` с полем `camera`.
+- Действие можно задать **на камеру** сервисом `car_techlan.set_camera_action` (сохраняется в опциях интеграции):
+
+```yaml
+service: car_techlan.set_camera_action
+data:
+  camera: Post5
+  action_unknown: impulse
+  devices_unknown: [cover.shlagbaum_post5]
+  cooldown: 30
+  hold_seconds: 1
+```
+
+Поля: `action` / `action_known` / `action_unknown` (`open|close|toggle|turn_on|turn_off|impulse|none`),
+`devices` / `devices_known` / `devices_unknown` (entity_id, можно несколько), `cooldown`, `hold_seconds`.
+Камерные правила имеют приоритет над общими настройками; факт настройки — событие `car_techlan_camera_action_set`.
+
 ## Сервисы
 
 | Сервис | Что делает |
 |:--|:--|
 | `car_techlan.trigger_plate` | симулировать распознавание номера |
+| `car_techlan.set_camera_action` | задать действие/устройства для конкретной камеры |
 | `car_techlan.server_restart_service` | перезапустить службу распознавания |
 | `car_techlan.server_clear_tts_cache` | очистить кэш озвучки |
 | `car_techlan.server_camera_restart` | перезапустить поток камеры |
