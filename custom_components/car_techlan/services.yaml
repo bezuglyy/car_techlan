@@ -1,0 +1,72 @@
+trigger_plate:
+  name: Симулировать распознавание
+  description: Запустить обработку номера вручную (для тестов и автоматизаций).
+  fields:
+    plate:
+      name: Номер
+      description: Номер автомобиля
+      required: true
+      example: "А123ВС125"
+      selector:
+        text:
+    camera:
+      name: Камера
+      description: Имя камеры (по умолчанию manual)
+      example: "Post5"
+      selector:
+        text:
+    known:
+      name: Свой
+      description: Считать номер своим (иначе определяется по справочнику)
+      selector:
+        boolean:
+    owner:
+      name: Владелец
+      description: Владелец (для уведомлений)
+      selector:
+        text:
+
+server_checks:
+  name: Проверки сервера
+  description: Запустить диагностику Car-Techlan-Server и вернуть результат в события.
+  fields:
+    host:
+      name: Хост сервера
+      selector:
+        text:
+    port:
+      name: Порт
+      selector:
+        number:
+          min: 1
+          max: 65535
+server_incidents:
+  name: Инциденты сервера
+  description: Получить последние инциденты (WARN/ERROR/ALERT).
+server_restart_web:
+  name: Перезапустить веб-панель
+  description: Перезагрузить веб-слой сервера (панель перестанет отвечать на несколько секунд).
+server_restart_service:
+  name: Перезапустить службу распознавания
+  description: Перезапустить задачу ALPR-Service (распознавание прервётся на несколько секунд).
+server_clear_tts_cache:
+  name: Очистить кэш TTS
+  description: Удалить озвучку старше N дней.
+  fields:
+    days:
+      name: Дней
+      selector:
+        number:
+          min: 1
+          max: 365
+          unit_of_measurement: дн
+server_camera_restart:
+  name: Перезапустить поток камеры
+  description: Переподключить камеру на сервере.
+  fields:
+    camera:
+      name: Камера
+      description: Имя камеры (например Post5)
+      required: true
+      selector:
+        text:
