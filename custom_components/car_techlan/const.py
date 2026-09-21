@@ -73,3 +73,6 @@ SERVICE_SERVER_RESTART_WEB = "server_restart_web"
 SERVICE_SERVER_RESTART_SERVICE = "server_restart_service"
 SERVICE_SERVER_CLEAR_TTS = "server_clear_tts_cache"
 SERVICE_SERVER_CAMERA_RESTART = "server_camera_restart"
+
+# --- действия ПО КАМЕРАМ (приоритет над общими) ---
+CONF_CAMERA_ACTIONS = "camera_actions"   # {камера: {action, action_known, action_unknown, devices, devices_known, devices_unknown, cooldown, hold_seconds}}
