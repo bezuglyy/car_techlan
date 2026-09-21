@@ -114,6 +114,9 @@ class CarTechlanOptionsFlow(config_entries.OptionsFlow):
                 cfg = dict(cam_actions.get(nm) or {})
                 act = str(user_input.pop(f"cam{i}_action", "") or "").strip()
                 devs = list(user_input.pop(f"cam{i}_devices", []) or [])
+                _dirv = str(user_input.pop(f"cam{i}_dir", "") or "").strip()
+                if _dirv:
+                    cfg["direction"] = _dirv
                 if act:
                     cfg["action"] = act
                     if act == "none":
@@ -203,6 +206,11 @@ class CarTechlanOptionsFlow(config_entries.OptionsFlow):
                                               mode=selector.SelectSelectorMode.DROPDOWN))
             fields[vol.Optional(f"cam{i}_action", default=(cfg or {}).get("action", ""))] = selector.SelectSelector(
                 selector.SelectSelectorConfig(options=[{"value": "", "label": "—"}] + _act_opts,
+                                              mode=selector.SelectSelectorMode.DROPDOWN))
+            fields[vol.Optional(f"cam{i}_dir", default=(cfg or {}).get("direction", ""))] = selector.SelectSelector(
+                selector.SelectSelectorConfig(options=[{"value": "", "label": "любое"},
+                                                      {"value": "in", "label": "въезд"},
+                                                      {"value": "out", "label": "выезд"}],
                                               mode=selector.SelectSelectorMode.DROPDOWN))
             fields[vol.Optional(f"cam{i}_devices", default=(cfg or {}).get("devices", []))] = _devices_selector()
         schema = schema.extend(fields)
