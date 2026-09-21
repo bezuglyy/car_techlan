@@ -11,6 +11,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_CAMERA_ACTIONS,
     CONF_COND_DAYS,
     CONF_COND_PLATES,
     CONF_COND_TIME_FROM,
@@ -104,11 +105,52 @@ class CarTechlanOptionsFlow(config_entries.OptionsFlow):
         opts = dict(self.config_entry.options or {})
         if user_input is not None:
             data = dict(opts)
+            # поля блоков «камера -> действие -> устройство» собираем в camera_actions
+            cam_actions = dict(opts.get(CONF_CAMERA_ACTIONS) or {})
+            for i in range(1, 7):
+                nm = str(user_input.pop(f"cam{i}_name", "") or "").strip()
+                if not nm:
+                    continue
+                cfg = dict(cam_actions.get(nm) or {})
+                act = str(user_input.pop(f"cam{i}_action", "") or "").strip()
+                devs = list(user_input.pop(f"cam{i}_devices", []) or [])
+                if act:
+                    cfg["action"] = act
+                    if act == "none":
+                        cfg["action_known"] = "none"
+                        cfg["action_unknown"] = "none"
+                if devs:
+                    cfg["devices"] = devs
+                cam_actions[nm] = cfg
+            for k in [k for k in list(user_input) if k.startswith("cam") and "_" in k and k[3].isdigit()]:
+                user_input.pop(k, None)
+            if cam_actions:
+                data[CONF_CAMERA_ACTIONS] = cam_actions
             data.update(user_input)
             return self.async_create_entry(title="", data=data)
 
         def d(key, default):
             return opts.get(key, default)
+
+        # список камер — живой, с сервера (чтобы новая камера сразу появилась в выборе)
+        cams: list[str] = []
+        try:
+            from .server_api import CarTechlanServer
+            from .const import (CONF_SERVER_HOST, CONF_SERVER_PORT, CONF_SERVER_KEY,
+                                DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT)
+            _d = dict(self.config_entry.data or {})
+            _host = opts.get(CONF_SERVER_HOST) or _d.get(CONF_SERVER_HOST) or DEFAULT_SERVER_HOST
+            _port = int(opts.get(CONF_SERVER_PORT) or _d.get(CONF_SERVER_PORT) or DEFAULT_SERVER_PORT)
+            _srv = CarTechlanServer(_host, _port, opts.get(CONF_SERVER_KEY) or _d.get(CONF_SERVER_KEY) or "")
+            _code, _all = await _srv.get_all()
+            if isinstance(_all, dict):
+                cams = sorted((( _all.get("config") or {}).get("cameras") or {}).keys())
+        except Exception:  # noqa: BLE001
+            cams = []
+        if not cams:
+            cams = ["Post2", "Post3", "Post5"]
+        _cam_opts = [{"value": c, "label": c} for c in cams]
+        _act_opts = [{"value": a, "label": a} for a in ACTIONS]
 
         schema = vol.Schema({
             vol.Optional(CONF_CAMERAS, default=d(CONF_CAMERAS, "")): str,
@@ -149,4 +191,19 @@ class CarTechlanOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(CONF_NOTIFY_KNOWN, default=d(CONF_NOTIFY_KNOWN, False)): bool,
             vol.Optional(CONF_NOTIFY_UNKNOWN, default=d(CONF_NOTIFY_UNKNOWN, True)): bool,
         })
+        # --- блоки «камера -> действие -> устройство» (до 6, по числу камер) ---
+        _ca = opts.get(CONF_CAMERA_ACTIONS) or {}
+        _items = list(_ca.items())[:6]
+        fields = {}
+        for i in range(1, 7):
+            nm = _items[i - 1][0] if i - 1 < len(_items) else ""
+            cfg = _items[i - 1][1] if i - 1 < len(_items) else {}
+            fields[vol.Optional(f"cam{i}_name", default=nm)] = selector.SelectSelector(
+                selector.SelectSelectorConfig(options=[{"value": "", "label": "—"}] + _cam_opts,
+                                              mode=selector.SelectSelectorMode.DROPDOWN))
+            fields[vol.Optional(f"cam{i}_action", default=(cfg or {}).get("action", ""))] = selector.SelectSelector(
+                selector.SelectSelectorConfig(options=[{"value": "", "label": "—"}] + _act_opts,
+                                              mode=selector.SelectSelectorMode.DROPDOWN))
+            fields[vol.Optional(f"cam{i}_devices", default=(cfg or {}).get("devices", []))] = _devices_selector()
+        schema = schema.extend(fields)
         return self.async_show_form(step_id="init", data_schema=schema)
