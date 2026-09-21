@@ -295,6 +295,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         cfg = _cam_map().get(cam)
         if not isinstance(cfg, dict):
             return
+        # гейт по направлению: если для камеры задано «въезд»/«выезд» — срабатываем только на него
+        want_dir = str(cfg.get("direction") or "").strip().lower()
+        got_dir = str(d.get("direction") or "").strip().lower()
+        if want_dir in ("in", "out") and got_dir and got_dir != want_dir:
+            return
+
         known = bool(d.get("known"))
         act = cfg.get("action_known" if known else "action_unknown") or cfg.get("action")
         devs = cfg.get("devices_known" if known else "devices_unknown") or cfg.get("devices") or []
