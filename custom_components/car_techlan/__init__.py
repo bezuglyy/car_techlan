@@ -242,6 +242,100 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.services.async_register(DOMAIN, "server_camera_restart", _svc_camera_restart,
                                      schema=vol.Schema({vol.Required("camera"): cv.string}, extra=vol.ALLOW_EXTRA))
 
+    # ================= по-камерные события и действия (аддитивно) =================
+    from .const import CONF_CAMERA_ACTIONS as _CCA
+
+    def _slug(s: str) -> str:
+        import re as _re
+        return _re.sub(r"[^a-z0-9_]+", "_", (s or "camera").lower()).strip("_") or "camera"
+
+    def _cam_map() -> dict:
+        src = dict(entry.data or {})
+        src.update(entry.options or {})
+        m = src.get(_CCA) or {}
+        return m if isinstance(m, dict) else {}
+
+    _last_cam_action: dict = {}
+
+    async def _apply_action(action: str, devices, hold: float = 1.0) -> None:
+        import asyncio
+        act = (action or "").strip().lower()
+        if act in ("", "none"):
+            return
+        for ent in (devices or []):
+            try:
+                if act == "open":
+                    await hass.services.async_call("cover", "open_cover", {"entity_id": ent}, blocking=False)
+                elif act == "close":
+                    await hass.services.async_call("cover", "close_cover", {"entity_id": ent}, blocking=False)
+                elif act == "toggle":
+                    await hass.services.async_call("homeassistant", "toggle", {"entity_id": ent}, blocking=False)
+                elif act == "turn_on":
+                    await hass.services.async_call("homeassistant", "turn_on", {"entity_id": ent}, blocking=False)
+                elif act == "turn_off":
+                    await hass.services.async_call("homeassistant", "turn_off", {"entity_id": ent}, blocking=False)
+                elif act == "impulse":
+                    await hass.services.async_call("homeassistant", "turn_on", {"entity_id": ent}, blocking=False)
+
+                    async def _off(e=ent, h=hold):
+                        await asyncio.sleep(max(0.2, float(h or 1)))
+                        await hass.services.async_call("homeassistant", "turn_off", {"entity_id": e}, blocking=False)
+
+                    hass.async_create_task(_off())
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("car_techlan: действие %s для %s — %s", act, ent, err)
+
+    async def _on_plate_camera(event) -> None:
+        import time as _t
+        d = dict(getattr(event, "data", None) or {})
+        cam = str(d.get("camera") or "manual")
+        # 1) отдельное событие на камеру: car_techlan_plate_<камера>
+        hass.bus.async_fire(f"{DOMAIN}_plate_{_slug(cam)}", d)
+        # 2) действие, заданное для этой камеры
+        cfg = _cam_map().get(cam)
+        if not isinstance(cfg, dict):
+            return
+        known = bool(d.get("known"))
+        act = cfg.get("action_known" if known else "action_unknown") or cfg.get("action")
+        devs = cfg.get("devices_known" if known else "devices_unknown") or cfg.get("devices") or []
+        cd = float(cfg.get("cooldown") or 0)
+        key = (cam, known)
+        if cd > 0 and (_t.time() - _last_cam_action.get(key, 0.0)) < cd:
+            return
+        _last_cam_action[key] = _t.time()
+        await _apply_action(act, devs, cfg.get("hold_seconds") or 1)
+        _LOGGER.warning("car_techlan: камера %s -> действие %s (номер %s, свой=%s)", cam, act, d.get("plate"), known)
+
+    unsub_cam = hass.bus.async_listen(f"{DOMAIN}_plate", _on_plate_camera)
+    entry.async_on_unload(unsub_cam)
+
+    async def _svc_set_camera_action(call) -> None:
+        cd = dict(call.data or {})
+        cam = str(cd.pop("camera", "") or "").strip()
+        if not cam:
+            return
+        cur = dict(_cam_map())
+        cur[cam] = cd
+        opts = dict(entry.options or {})
+        opts[_CCA] = cur
+        hass.config_entries.async_update_entry(entry, options=opts)
+        hass.bus.async_fire(f"{DOMAIN}_camera_action_set", {"camera": cam, "config": cd})
+        _LOGGER.warning("car_techlan: действия для камеры %s заданы: %s", cam, cd)
+
+    if not hass.services.has_service(DOMAIN, "set_camera_action"):
+        hass.services.async_register(DOMAIN, "set_camera_action", _svc_set_camera_action, schema=vol.Schema({
+            vol.Required("camera"): cv.string,
+            vol.Optional("action"): cv.string,
+            vol.Optional("action_known"): cv.string,
+            vol.Optional("action_unknown"): cv.string,
+            vol.Optional("devices"): vol.All(cv.ensure_list, [cv.string]),
+            vol.Optional("devices_known"): vol.All(cv.ensure_list, [cv.string]),
+            vol.Optional("devices_unknown"): vol.All(cv.ensure_list, [cv.string]),
+            vol.Optional("cooldown"): vol.Coerce(float),
+            vol.Optional("hold_seconds"): vol.Coerce(float),
+        }, extra=vol.ALLOW_EXTRA))
+    # ================= /по-камерные события и действия =================
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True
